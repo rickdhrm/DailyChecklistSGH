@@ -34,8 +34,11 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!session) return null;
 
   const res = await query<User>(
-    `SELECT id, username, email, full_name, employee_code, role, is_active, created_by, created_at 
-     FROM users WHERE id = $1 AND is_active = true`,
+    `SELECT u.id, u.username, u.email, u.full_name, u.employee_code, u.role, u.is_active, u.created_by, u.created_at,
+            u.department_id, d.name AS department_name, d.code AS department_code
+     FROM users u
+     LEFT JOIN departments d ON u.department_id = d.id
+     WHERE u.id = $1 AND u.is_active = true`,
     [session.userId]
   );
 

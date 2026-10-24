@@ -10,6 +10,24 @@ export interface User {
   is_active: boolean;
   created_by?: string;
   created_at?: string;
+  registered_by_name?: string;
+  department_id?: string;
+  department_name?: string;
+  department_code?: string;
+}
+
+export interface Department {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  assigned_user_count?: number;
+  assigned_form_count?: number;
+  assigned_users?: string[];
+  assigned_forms?: string[];
 }
 
 export interface Location {
@@ -84,10 +102,16 @@ export interface FormSubmission {
   template_id: string;
   template_title?: string;
   template_code?: string;
+  template_category?: string;
+  template_form_type?: FormType;
+  schema_definition?: FormSchema;
   template_version: number;
   technician_id: string;
   technician_name?: string;
   employee_code?: string;
+  department_id?: string;
+  department_name?: string;
+  department_code?: string;
   location_id: string;
   location_name?: string;
   location_building?: string;

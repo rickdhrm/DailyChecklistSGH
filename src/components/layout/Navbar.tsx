@@ -6,14 +6,12 @@ import { useRouter, usePathname } from 'next/navigation';
 import { User } from '@/types';
 import { 
   ClipboardList, 
-  CheckSquare, 
   Users, 
   Archive, 
   LogOut, 
-  UserCheck, 
   Sliders, 
-  ShieldAlert,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Building2
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -39,21 +37,21 @@ export default function Navbar({ user }: NavbarProps) {
   const isAdminOrSpv = user.role === 'ADMIN' || user.role === 'SPV';
 
   return (
-    <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white">
-                <CheckSquare className="h-5 w-5" />
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="h-11 w-11 rounded-xl bg-slate-50 border border-amber-500/30 p-1 flex items-center justify-center shadow-xs shadow-amber-500/10 group-hover:border-amber-500/60 transition-colors">
+                <img src="/logo.png" alt="SGH Tower" className="h-full w-auto object-contain" />
               </div>
               <div>
-                <span className="font-bold text-lg tracking-tight text-white block leading-tight">
-                  SGH Checklist
+                <span className="font-extrabold text-lg tracking-tight text-slate-900 block leading-tight font-serif">
+                  SGH TOWER
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-blue-400 font-semibold">
-                  Facility Engine
+                <span className="text-[10px] uppercase tracking-widest text-amber-700 font-semibold">
+                  Facility Management
                 </span>
               </div>
             </Link>
@@ -65,66 +63,76 @@ export default function Navbar({ user }: NavbarProps) {
             <Link
               href="/"
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                pathname === '/' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                pathname === '/' ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <ClipboardList className="h-4 w-4" />
+              <ClipboardList className="h-4 w-4 text-amber-600" />
               Checklists
             </Link>
 
             <Link
               href="/history"
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                pathname.startsWith('/history') ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                pathname.startsWith('/history') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <FileSpreadsheet className="h-4 w-4" />
+              <FileSpreadsheet className="h-4 w-4 text-amber-600" />
               My Submissions
             </Link>
 
             {/* Admin / SPV Nav Links */}
             {isAdminOrSpv && (
               <>
-                <div className="h-5 w-px bg-slate-800 mx-2" />
+                <div className="h-5 w-px bg-slate-200 mx-2" />
                 <Link
                   href="/admin/submissions"
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    pathname.startsWith('/admin/submissions') ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    pathname.startsWith('/admin/submissions') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <FileSpreadsheet className="h-4 w-4" />
+                  <FileSpreadsheet className="h-4 w-4 text-amber-600" />
                   Monitor Data
                 </Link>
 
                 <Link
                   href="/admin/forms"
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    pathname.startsWith('/admin/forms') ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    pathname.startsWith('/admin/forms') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <Sliders className="h-4 w-4" />
+                  <Sliders className="h-4 w-4 text-amber-600" />
                   Form Builder
                 </Link>
 
                 {user.role === 'ADMIN' && (
                   <Link
-                    href="/admin/users"
+                    href="/admin/departments"
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                      pathname.startsWith('/admin/users') ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      pathname.startsWith('/admin/departments') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     }`}
                   >
-                    <Users className="h-4 w-4" />
-                    Technicians
+                    <Building2 className="h-4 w-4 text-amber-600" />
+                    Departments
                   </Link>
                 )}
 
                 <Link
-                  href="/admin/housekeeping"
+                  href="/admin/users"
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    pathname.startsWith('/admin/housekeeping') ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    pathname.startsWith('/admin/users') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <Archive className="h-4 w-4" />
+                  <Users className="h-4 w-4 text-amber-600" />
+                  Staff & Users
+                </Link>
+
+                <Link
+                  href="/admin/housekeeping"
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                    pathname.startsWith('/admin/housekeeping') ? 'bg-amber-50 text-amber-800 border border-amber-500/35 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Archive className="h-4 w-4 text-amber-600" />
                   Housekeeping
                 </Link>
               </>
@@ -134,21 +142,21 @@ export default function Navbar({ user }: NavbarProps) {
           {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <div className="text-sm font-medium text-slate-200 flex items-center gap-1.5 justify-end">
+              <div className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 justify-end">
                 <span>{user.full_name}</span>
                 <span
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                     user.role === 'ADMIN'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
                       : user.role === 'SPV'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   }`}
                 >
                   {user.role}
                 </span>
               </div>
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-slate-500">
                 {user.employee_code || user.username}
               </div>
             </div>
@@ -156,7 +164,7 @@ export default function Navbar({ user }: NavbarProps) {
             <button
               onClick={handleLogout}
               title="Sign Out"
-              className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-slate-100 transition-colors"
             >
               <LogOut className="h-5 w-5" />
             </button>
@@ -165,11 +173,11 @@ export default function Navbar({ user }: NavbarProps) {
       </div>
 
       {/* Mobile Sub-Navigation Bar */}
-      <div className="md:hidden flex items-center justify-around border-t border-slate-800/80 bg-slate-900/95 py-2 px-1 text-xs">
+      <div className="md:hidden flex items-center justify-around border-t border-slate-200 bg-white/95 py-2 px-1 text-xs">
         <Link
           href="/"
           className={`flex flex-col items-center gap-1 px-3 py-1 rounded-md ${
-            pathname === '/' ? 'text-blue-400 font-semibold' : 'text-slate-400'
+            pathname === '/' ? 'text-amber-700 font-semibold' : 'text-slate-500'
           }`}
         >
           <ClipboardList className="h-4 w-4" />
@@ -178,7 +186,7 @@ export default function Navbar({ user }: NavbarProps) {
         <Link
           href="/history"
           className={`flex flex-col items-center gap-1 px-3 py-1 rounded-md ${
-            pathname.startsWith('/history') ? 'text-blue-400 font-semibold' : 'text-slate-400'
+            pathname.startsWith('/history') ? 'text-amber-700 font-semibold' : 'text-slate-500'
           }`}
         >
           <FileSpreadsheet className="h-4 w-4" />
@@ -188,7 +196,7 @@ export default function Navbar({ user }: NavbarProps) {
           <Link
             href="/admin/submissions"
             className={`flex flex-col items-center gap-1 px-3 py-1 rounded-md ${
-              pathname.startsWith('/admin') ? 'text-indigo-400 font-semibold' : 'text-slate-400'
+              pathname.startsWith('/admin') ? 'text-amber-700 font-semibold' : 'text-slate-500'
             }`}
           >
             <Sliders className="h-4 w-4" />

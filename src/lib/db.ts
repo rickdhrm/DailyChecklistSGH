@@ -20,8 +20,12 @@ const pool =
     },
     max: 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 20000,
   });
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle Neon PostgreSQL client', err);
+});
 
 if (process.env.NODE_ENV !== 'production') {
   global.__dbPool = pool;

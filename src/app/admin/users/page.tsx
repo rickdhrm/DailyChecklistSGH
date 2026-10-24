@@ -3,40 +3,59 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
-import { User } from '@/types';
+import { User, UserRole, Department } from '@/types';
 import { 
   Users, 
   UserPlus, 
+  Search, 
   ShieldCheck, 
   Wrench, 
   UserCheck, 
   CheckCircle2, 
-  AlertCircle, 
-  Clock, 
+  AlertTriangle, 
+  X, 
+  Save, 
   Loader2,
-  X,
-  Save,
-  Search
+  KeyRound,
+  Eye,
+  EyeOff,
+  Building2,
+  Lock,
+  Check
 } from 'lucide-react';
 
-export default function AdminUsersPage() {
+export default function UsersAdminPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deptFilter, setDeptFilter] = useState<string>('ALL');
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Register Modal
+  // New user modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [employeeCode, setEmployeeCode] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'TECHNICIAN' | 'SPV'>('TECHNICIAN');
+  const [showPassword, setShowPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<UserRole>('TECHNICIAN');
+  const [departmentId, setDepartmentId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Reset Password Modal
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [targetUser, setTargetUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -47,15 +66,17 @@ export default function AdminUsersPage() {
           return;
         }
         const meData = await meRes.json();
-        if (meData.user.role !== 'ADMIN') {
+        // Allow both ADMIN and SPV
+        if (meData.user.role !== 'ADMIN' && meData.user.role !== 'SPV') {
           router.push('/');
           return;
         }
         setCurrentUser(meData.user);
 
-        await fetchUsers();
+        // Fetch users & departments
+        await Promise.all([fetchUsersList(), fetchDepartmentsList()]);
       } catch (err) {
-        console.error('Error loading users:', err);
+        console.error('Error initializing users page:', err);
       } finally {
         setLoading(false);
       }
@@ -64,11 +85,42 @@ export default function AdminUsersPage() {
     loadData();
   }, [router]);
 
-  const fetchUsers = async () => {
-    const res = await fetch('/api/users');
-    if (res.ok) {
-      setUsers(await res.json());
+  const fetchUsersList = async () => {
+    const usersRes = await fetch('/api/users');
+    if (usersRes.ok) {
+      const userList = await usersRes.json();
+      setUsers(userList);
     }
+  };
+
+  const fetchDepartmentsList = async () => {
+    const res = await fetch('/api/departments');
+    if (res.ok) {
+      const data = await res.json();
+      setDepartments(data);
+    }
+  };
+
+  // Open Register User Modal
+  const openRegisterModal = () => {
+    setUsername('');
+    setPassword('');
+    setShowPassword(false);
+    setFullName('');
+    setEmployeeCode('');
+    setEmail('');
+    setModalError(null);
+
+    if (currentUser?.role === 'SPV') {
+      // SPV locked to TECHNICIAN role and their own department
+      setRole('TECHNICIAN');
+      setDepartmentId(currentUser.department_id || '');
+    } else {
+      setRole('TECHNICIAN');
+      setDepartmentId('');
+    }
+
+    setIsModalOpen(true);
   };
 
   const handleRegisterUser = async (e: React.FormEvent) => {
@@ -77,30 +129,35 @@ export default function AdminUsersPage() {
     setModalError(null);
 
     try {
+      const payload: any = {
+        username,
+        password,
+        full_name: fullName,
+        employee_code: employeeCode,
+        email,
+        role: currentUser?.role === 'SPV' ? 'TECHNICIAN' : role,
+      };
+
+      if (currentUser?.role === 'ADMIN') {
+        payload.department_id = departmentId || null;
+      } else if (currentUser?.role === 'SPV') {
+        payload.department_id = currentUser.department_id;
+      }
+
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: fullName,
-          username,
-          email,
-          employee_code: employeeCode,
-          password,
-          role,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || 'Failed to register technician');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create user');
 
-      setFeedback(`Technician ${fullName} registered successfully.`);
+      setFeedback(`User account for "${fullName}" (${username}) successfully registered.`);
       setIsModalOpen(false);
-      setFullName('');
-      setUsername('');
-      setEmail('');
-      setEmployeeCode('');
-      setPassword('');
-      await fetchUsers();
+
+      // Refresh list
+      await fetchUsersList();
     } catch (err: any) {
       setModalError(err.message);
     } finally {
@@ -108,185 +165,360 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Open Reset Password Modal
+  const openResetPasswordModal = (user: User) => {
+    setTargetUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowResetPassword(false);
+    setResetError(null);
+    setResetModalOpen(true);
+  };
+
+  // Submit Password Reset
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetUser) return;
+
+    if (newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+
+    setResetSubmitting(true);
+    setResetError(null);
+
+    try {
+      const res = await fetch(`/api/users/${targetUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+
+      setFeedback(`Password for "${targetUser.full_name}" (${targetUser.username}) has been successfully updated.`);
+      setResetModalOpen(false);
+    } catch (err: any) {
+      setResetError(err.message);
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  // Permission check for resetting password
+  const canResetPassword = (user: User): boolean => {
+    if (!currentUser) return false;
+    // Admin can reset password of all users
+    if (currentUser.role === 'ADMIN') return true;
+    // SPV can only reset password for TECHNICIAN in their department
+    if (currentUser.role === 'SPV') {
+      return (
+        user.role === 'TECHNICIAN' &&
+        !!currentUser.department_id &&
+        user.department_id === currentUser.department_id
+      );
+    }
+    return false;
+  };
+
   const filtered = users.filter((u) => {
     const q = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       u.full_name?.toLowerCase().includes(q) ||
       u.username?.toLowerCase().includes(q) ||
-      u.employee_code?.toLowerCase().includes(q)
+      u.employee_code?.toLowerCase().includes(q) ||
+      u.department_name?.toLowerCase().includes(q)
     );
+
+    if (currentUser?.role === 'SPV') {
+      return matchesSearch;
+    }
+
+    if (deptFilter === 'ALL') return matchesSearch;
+    if (deptFilter === 'UNASSIGNED') return matchesSearch && !u.department_id;
+    return matchesSearch && u.department_id === deptFilter;
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 pb-20">
+    <div className="min-h-screen bg-[#f8f9fb] pb-20 text-slate-800">
       <Navbar user={currentUser} />
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              <Users className="h-6 w-6 text-indigo-400" />
-              Technician Provisioning & Access
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2 font-serif">
+              <Users className="h-6 w-6 text-amber-600" />
+              Staff & User Provisioning
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Field personnel management. Strict enterprise rule: Technicians must be registered directly by an Admin.
+            <p className="text-xs text-slate-500 mt-1">
+              {currentUser?.role === 'ADMIN'
+                ? 'Enterprise Administration: Provision supervisors, technicians, assign departments, and manage security credentials.'
+                : `Supervisor Portal: Provision technicians and manage credentials for your department (${currentUser?.department_name || 'Assigned Division'}).`}
             </p>
           </div>
 
           <button
-            onClick={() => {
-              setIsModalOpen(true);
-              setModalError(null);
-            }}
-            className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-lg shadow-blue-600/30 shrink-0"
+            onClick={openRegisterModal}
+            className="px-4 py-2.5 rounded-lg btn-gold font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 shrink-0 cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
-            Register Technician
+            {currentUser?.role === 'ADMIN' ? 'Register New User' : 'Register Technician'}
           </button>
         </div>
 
+        {/* Feedback Alert */}
         {feedback && (
-          <div className="mb-6 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
+          <div className="mb-6 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <span>{feedback}</span>
             </div>
-            <button onClick={() => setFeedback(null)}>
-              <X className="h-4 w-4 text-emerald-400" />
+            <button onClick={() => setFeedback(null)} className="cursor-pointer">
+              <X className="h-4 w-4 text-emerald-600" />
+            </button>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-6 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-rose-600" />
+              <span>{errorMessage}</span>
+            </div>
+            <button onClick={() => setErrorMessage(null)} className="cursor-pointer">
+              <X className="h-4 w-4 text-rose-600" />
             </button>
           </div>
         )}
 
         {/* Users Table */}
-        <div className="facility-card overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-xs text-slate-400">
-              Registered Accounts: <span className="font-semibold text-white">{filtered.length}</span>
+        <div className="facility-card overflow-hidden bg-white border border-slate-200 shadow-xs">
+          <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="text-xs text-slate-500 flex items-center gap-3">
+              <span>
+                {currentUser?.role === 'SPV' ? 'Department Personnel:' : 'Total Accounts:'}{' '}
+                <strong className="text-slate-900">{filtered.length}</strong>
+              </span>
+              {currentUser?.role === 'SPV' && (
+                <span className="bg-amber-50 text-amber-800 px-2.5 py-1 rounded-md text-[11px] font-semibold border border-amber-200 flex items-center gap-1.5">
+                  <Building2 className="h-3 w-3 text-amber-600" />
+                  <span>Division: {currentUser.department_name || 'Assigned Department'}</span>
+                </span>
+              )}
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, code..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-md bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              {/* Department Filter (Admin only) */}
+              {currentUser?.role === 'ADMIN' && (
+                <div className="relative w-full sm:w-48">
+                  <select
+                    value={deptFilter}
+                    onChange={(e) => setDeptFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-300 text-slate-800 text-xs focus:bg-white"
+                  >
+                    <option value="ALL">All Departments</option>
+                    <option value="UNASSIGNED">Unassigned</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.code} - {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Search Box */}
+              <div className="relative w-full sm:w-60">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={currentUser?.role === 'SPV' ? 'Search department staff...' : 'Search name, code, dept...'}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-md bg-slate-50 border border-slate-300 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500/50 focus:bg-white"
+                />
+              </div>
             </div>
           </div>
 
           {loading ? (
             <div className="p-12 text-center text-slate-500 flex items-center justify-center gap-2">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-              <span>Loading registered personnel...</span>
+              <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+              <span>Loading staff directory...</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/90 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                <thead className="bg-slate-100 text-slate-600 uppercase tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
                     <th className="py-3 px-4">Full Name</th>
                     <th className="py-3 px-4">Username & Code</th>
-                    <th className="py-3 px-4">Email Address</th>
+                    <th className="py-3 px-4">Department</th>
                     <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Registered By</th>
+                    <th className="py-3 px-4">Email</th>
                     <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Joined Date</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {filtered.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-900/40 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-white">
-                        {u.full_name}
-                      </td>
-                      <td className="py-3 px-4 text-slate-300 font-mono text-[11px]">
-                        <div>{u.username}</div>
-                        <span className="text-slate-500">{u.employee_code || '-'}</span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-400">{u.email}</td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            u.role === 'ADMIN'
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                              : u.role === 'SPV'
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          }`}
-                        >
-                          {u.role === 'ADMIN' ? (
-                            <ShieldCheck className="h-3 w-3" />
-                          ) : u.role === 'SPV' ? (
-                            <UserCheck className="h-3 w-3" />
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((u) => {
+                    const permittedToReset = canResetPassword(u);
+
+                    return (
+                      <tr key={u.id} className="hover:bg-amber-50/20 transition-colors">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          {u.full_name}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-mono text-[11px]">
+                          <div>{u.username}</div>
+                          <span className="text-slate-400">{u.employee_code || '-'}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {u.department_name ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50/70 text-amber-900 border border-amber-200/80 font-medium text-[11px]">
+                              <Building2 className="h-3 w-3 text-amber-600" />
+                              <span>{u.department_name}</span>
+                            </span>
                           ) : (
-                            <Wrench className="h-3 w-3" />
+                            <span className="text-slate-400 italic text-[11px]">Unassigned</span>
                           )}
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-400">
-                        {u.registered_by_name || 'System Initial'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
-                          Active
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-400">
-                        {new Date(u.created_at).toLocaleDateString('id-ID')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              u.role === 'ADMIN'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : u.role === 'SPV'
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {u.role === 'ADMIN' ? (
+                              <ShieldCheck className="h-3 w-3" />
+                            ) : u.role === 'SPV' ? (
+                              <UserCheck className="h-3 w-3" />
+                            ) : (
+                              <Wrench className="h-3 w-3" />
+                            )}
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">{u.email}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              u.is_active
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-500 border border-slate-200'
+                            }`}
+                          >
+                            {u.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {permittedToReset ? (
+                            <button
+                              onClick={() => openResetPasswordModal(u)}
+                              className="px-2.5 py-1 rounded-md border border-slate-300 text-slate-700 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50/50 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <KeyRound className="h-3 w-3 text-amber-600" />
+                              Reset Password
+                            </button>
+                          ) : (
+                            <span
+                              title={
+                                currentUser?.role === 'SPV'
+                                  ? 'Supervisors can only reset password for technicians in their department'
+                                  : 'Protected account'
+                              }
+                              className="inline-flex items-center gap-1 text-[11px] text-slate-400 px-2 py-1 rounded bg-slate-100/60 cursor-not-allowed"
+                            >
+                              <Lock className="h-3 w-3 text-slate-400" />
+                              Protected
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                        <Users className="h-7 w-7 mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs font-semibold text-slate-700">
+                          {currentUser?.role === 'SPV'
+                            ? `No personnel found in ${currentUser.department_name || 'your department'}`
+                            : 'No personnel found matching the criteria'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {currentUser?.role === 'SPV'
+                            ? 'Click "Register Technician" to add technicians to your department.'
+                            : 'Try adjusting your search or department filter.'}
+                        </p>
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
           )}
         </div>
 
-        {/* Register Technician Modal */}
+        {/* Register User Modal */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="facility-card w-full max-w-lg p-6 shadow-2xl relative">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <div className="facility-card w-full max-w-lg p-6 shadow-2xl relative bg-white border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
                 <div>
-                  <h3 className="text-base font-bold text-white">Register New Technician / User</h3>
-                  <p className="text-xs text-slate-400">
-                    Create credentials and assign an operational role.
+                  <h3 className="text-base font-bold text-slate-900 font-serif">
+                    {currentUser?.role === 'ADMIN' ? 'Register New Staff / User' : 'Register Department Technician'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {currentUser?.role === 'ADMIN'
+                      ? 'Create credentials and assign department & role.'
+                      : `Provision a technician account bound to ${currentUser?.department_name || 'your department'}.`}
                   </p>
                 </div>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               {modalError && (
-                <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
                   {modalError}
                 </div>
               )}
 
               <form onSubmit={handleRegisterUser} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
                     Full Name *
                   </label>
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Ahmad Fadli"
+                    placeholder="e.g. Ahmad Fauzi"
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
                       Username *
                     </label>
                     <input
@@ -295,12 +527,12 @@ export default function AdminUsersPage() {
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder="e.g. tech_ahmad"
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono focus:bg-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
                       Employee Code
                     </label>
                     <input
@@ -308,13 +540,13 @@ export default function AdminUsersPage() {
                       value={employeeCode}
                       onChange={(e) => setEmployeeCode(e.target.value)}
                       placeholder="e.g. TCH-105"
-                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs font-mono"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono focus:bg-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
                     Email Address *
                   </label>
                   <input
@@ -323,52 +555,101 @@ export default function AdminUsersPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="ahmad@sgh.local"
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Temporary Password *
-                    </label>
+                {/* Password with View Toggle */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                    Temporary Password *
+                  </label>
+                  <div className="relative">
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
                       required
-                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs"
+                      className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Assigned Role
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as any)}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white text-xs"
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
                     >
-                      <option value="TECHNICIAN">Technician (Field Inspections)</option>
-                      <option value="SPV">Supervisor (SPV)</option>
-                    </select>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+                {/* Role and Department */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                      Assigned Role
+                    </label>
+                    {currentUser?.role === 'ADMIN' ? (
+                      <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value as any)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
+                      >
+                        <option value="TECHNICIAN">Technician (Field Inspections)</option>
+                        <option value="SPV">Supervisor (SPV)</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value="Technician"
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold cursor-not-allowed"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                      Department
+                    </label>
+                    {currentUser?.role === 'ADMIN' ? (
+                      <select
+                        value={departmentId}
+                        onChange={(e) => setDepartmentId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
+                      >
+                        <option value="">Unassigned</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.code} - {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={currentUser?.department_name || 'My Department'}
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold cursor-not-allowed"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300"
+                    className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-700 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg btn-gold font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 shadow-md shadow-amber-500/20 cursor-pointer"
                   >
                     {submitting ? (
                       <>
@@ -378,7 +659,124 @@ export default function AdminUsersPage() {
                     ) : (
                       <>
                         <Save className="h-3.5 w-3.5" />
-                        Create Technician Account
+                        Create Account
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Reset Password Modal */}
+        {resetModalOpen && targetUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <div className="facility-card w-full max-w-md p-6 shadow-2xl relative bg-white border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-serif flex items-center gap-2">
+                    <KeyRound className="h-5 w-5 text-amber-600" />
+                    Reset Password
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Set a new security password for {targetUser.full_name}.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setResetModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* User details badge */}
+              <div className="mb-4 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Target User:</span>
+                  <span className="font-bold text-slate-900">{targetUser.full_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Username:</span>
+                  <span className="font-mono text-slate-700">{targetUser.username}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Department:</span>
+                  <span className="text-amber-800 font-medium">
+                    {targetUser.department_name || 'Unassigned'}
+                  </span>
+                </div>
+              </div>
+
+              {resetError && (
+                <div className="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                  {resetError}
+                </div>
+              )}
+
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                    New Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showResetPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      required
+                      minLength={6}
+                      className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+                    Confirm New Password *
+                  </label>
+                  <input
+                    type={showResetPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    required
+                    minLength={6}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:bg-white"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setResetModalOpen(false)}
+                    className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-700 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetSubmitting}
+                    className="px-4 py-2 rounded-lg btn-gold font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 shadow-md shadow-amber-500/20 cursor-pointer"
+                  >
+                    {resetSubmitting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Update Password
                       </>
                     )}
                   </button>

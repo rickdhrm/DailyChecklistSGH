@@ -6,16 +6,45 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { id } = await params;
-    const res = await query(
-      `SELECT id, code, title, description, category, form_type, version, is_active, schema_definition, created_at, updated_at
-       FROM form_templates
-       WHERE id = $1`,
-      [id]
-    );
+
+    let sql = `
+      SELECT ft.id, ft.code, ft.title, ft.description, ft.category, ft.form_type, ft.version, ft.is_active, ft.schema_definition, ft.created_at, ft.updated_at
+      FROM form_templates ft
+    `;
+    const queryParams: any[] = [id];
+
+    if (currentUser.role !== 'ADMIN') {
+      if (!currentUser.department_id) {
+        return NextResponse.json(
+          { error: 'You are not assigned to any department. Contact your administrator.' },
+          { status: 403 }
+        );
+      }
+      sql += `
+        INNER JOIN department_forms df ON df.template_id = ft.id
+        WHERE ft.id = $1 AND df.department_id = $2
+      `;
+      queryParams.push(currentUser.department_id);
+    } else {
+      sql += ` WHERE ft.id = $1`;
+    }
+
+    const res = await query(sql, queryParams);
 
     if (res.rowCount === 0) {
+      if (currentUser.role !== 'ADMIN') {
+        return NextResponse.json(
+          { error: 'This checklist form is not designated for your department' },
+          { status: 403 }
+        );
+      }
       return NextResponse.json({ error: 'Form template not found' }, { status: 404 });
     }
 

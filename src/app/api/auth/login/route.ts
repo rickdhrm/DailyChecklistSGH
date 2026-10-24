@@ -11,9 +11,11 @@ export async function POST(request: Request) {
     }
 
     const res = await query(
-      `SELECT id, username, email, password_hash, full_name, employee_code, role, is_active 
-       FROM users 
-       WHERE (username = $1 OR email = $1) AND is_active = true`,
+      `SELECT u.id, u.username, u.email, u.password_hash, u.full_name, u.employee_code, u.role, u.is_active,
+              u.department_id, d.name AS department_name, d.code AS department_code
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE (u.username = $1 OR u.email = $1) AND u.is_active = true`,
       [username.trim()]
     );
 
@@ -46,6 +48,11 @@ export async function POST(request: Request) {
         fullName: user.full_name,
         role: user.role,
         employeeCode: user.employee_code,
+        department_id: user.department_id,
+        department_name: user.department_name,
+        department_code: user.department_code,
+        departmentId: user.department_id,
+        departmentName: user.department_name,
       },
     });
 

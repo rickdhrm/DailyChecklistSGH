@@ -18,12 +18,16 @@ export async function GET(
               s.status, s.has_abnormal_reading, s.technician_notes, s.submission_data,
               s.submitted_at, s.updated_at, s.is_archived,
               t.title AS template_title, t.code AS template_code, t.category AS template_category,
-              t.schema_definition,
+              t.form_type AS template_form_type, t.schema_definition,
               u.full_name AS technician_name, u.employee_code,
+              COALESCE(d.id, (SELECT df.department_id FROM department_forms df WHERE df.template_id = s.template_id LIMIT 1)) AS department_id,
+              COALESCE(d.name, (SELECT d2.name FROM department_forms df JOIN departments d2 ON df.department_id = d2.id WHERE df.template_id = s.template_id LIMIT 1)) AS department_name,
+              COALESCE(d.code, (SELECT d2.code FROM department_forms df JOIN departments d2 ON df.department_id = d2.id WHERE df.template_id = s.template_id LIMIT 1)) AS department_code,
               l.name AS location_name, l.floor AS location_floor, l.building AS location_building
        FROM form_submissions s
        JOIN form_templates t ON s.template_id = t.id
        JOIN users u ON s.technician_id = u.id
+       LEFT JOIN departments d ON u.department_id = d.id
        JOIN locations l ON s.location_id = l.id
        WHERE s.id = $1`,
       [id]

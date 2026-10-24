@@ -1,16 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b0f19;
-  --foreground: #f3f4f6;
-  --card: #111827;
-  --card-border: #1f2937;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
+  --background: #f8f9fb;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-border: #e2e8f0;
+  --gold-300: #ebd88a;
+  --gold-400: #dfc665;
+  --gold-500: #c5a543;
+  --gold-600: #aa822a;
+  --gold-700: #8c6718;
+  --gold-muted: rgba(197, 165, 67, 0.12);
+  --gold-border: rgba(197, 165, 67, 0.35);
   --accent: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
-  --muted: #6b7280;
 }
 
 body {
@@ -21,38 +25,92 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Facility high contrast card */
+/* SGH Tower Executive Light Card */
 .facility-card {
-  background: #111827;
-  border: 1px solid #1f2937;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .facility-card:hover {
-  border-color: #374151;
+  border-color: rgba(197, 165, 67, 0.5);
+  box-shadow: 0 10px 25px -5px rgba(197, 165, 67, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
 }
 
-/* Custom scrollbars */
+/* SGH Luxury Gold Gradient Button */
+.btn-gold {
+  background: linear-gradient(135deg, #dfc665 0%, #c5a543 50%, #aa822a 100%);
+  color: #0b0e14;
+  font-weight: 700;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px 0 rgba(197, 165, 67, 0.35);
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, #ebd88a 0%, #dfc665 50%, #c5a543 100%);
+  box-shadow: 0 6px 20px rgba(197, 165, 67, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+/* SGH Gold Metallic Text */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #8c6718 0%, #c5a543 50%, #6e4e0c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gold Badge */
+.badge-gold {
+  background: rgba(197, 165, 67, 0.12);
+  color: #8c6718;
+  border: 1px solid rgba(197, 165, 67, 0.3);
+}
+
+/* Custom light scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: #c5a543;
 }
 
 /* Tactile touch targets */
 .touch-target {
   min-height: 44px;
+}
+
+/* Mobile Safe Area & Bottom Floating Bar Padding */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+}
+
+/* Prevent iOS Safari aggressive auto-zoom on input focus on small screens */
+@media screen and (max-width: 640px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

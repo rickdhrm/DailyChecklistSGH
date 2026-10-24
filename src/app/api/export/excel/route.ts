@@ -11,8 +11,9 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get('location_id');
-  const dateFrom = searchParams.get('date_from');
-  const dateTo = searchParams.get('date_to');
+  const templateId = searchParams.get('template_id');
+  const dateFrom = searchParams.get('date_from') || searchParams.get('from');
+  const dateTo = searchParams.get('date_to') || searchParams.get('to');
 
   try {
     let sql = `
@@ -30,17 +31,40 @@ export async function GET(request: Request) {
     const params: any[] = [];
     let pIdx = 1;
 
+    if (currentUser.role === 'TECHNICIAN') {
+      sql += ` AND s.technician_id = $${pIdx++}`;
+      params.push(currentUser.id);
+    } else if (currentUser.role === 'SPV') {
+      if (currentUser.department_id) {
+        sql += ` AND (
+          u.department_id = $${pIdx}
+          OR s.technician_id = $${pIdx + 1}
+          OR s.template_id IN (SELECT template_id FROM department_forms WHERE department_id = $${pIdx})
+        )`;
+        params.push(currentUser.department_id, currentUser.id);
+        pIdx += 2;
+      } else {
+        sql += ` AND s.technician_id = $${pIdx++}`;
+        params.push(currentUser.id);
+      }
+    }
+
     if (locationId) {
       sql += ` AND s.location_id = $${pIdx++}`;
       params.push(locationId);
+    }
+    if (templateId) {
+      sql += ` AND s.template_id = $${pIdx++}`;
+      params.push(templateId);
     }
     if (dateFrom) {
       sql += ` AND s.submitted_at >= $${pIdx++}::timestamptz`;
       params.push(dateFrom);
     }
     if (dateTo) {
+      const formattedDateTo = dateTo.length === 10 ? `${dateTo}T23:59:59.999Z` : dateTo;
       sql += ` AND s.submitted_at <= $${pIdx++}::timestamptz`;
-      params.push(dateTo);
+      params.push(formattedDateTo);
     }
 
     sql += ` ORDER BY s.submitted_at DESC`;
