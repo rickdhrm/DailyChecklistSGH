@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import { FormSubmission, Location, FormTemplate, User } from '@/types';
 import SubmissionDetailModal from '@/components/submissions/SubmissionDetailModal';
-import { 
-  FileSpreadsheet, 
-  Download, 
-  Filter, 
-  RotateCcw, 
-  Search, 
-  Calendar, 
-  MapPin, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Eye, 
-  X, 
+import {
+  FileSpreadsheet,
+  Download,
+  Filter,
+  RotateCcw,
+  Search,
+  Calendar,
+  MapPin,
+  CheckCircle2,
+  AlertTriangle,
+  Eye,
+  X,
   Loader2,
   FileText
 } from 'lucide-react';
@@ -356,11 +356,10 @@ export default function SubmissionsAdminPage() {
                       </td>
                       <td className="py-3 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            sub.has_abnormal_reading
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${sub.has_abnormal_reading
                               ? 'bg-rose-50 text-rose-700 border border-rose-200'
                               : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}
+                            }`}
                         >
                           {sub.has_abnormal_reading ? 'ABNORMAL' : 'NORMAL'}
                         </span>
