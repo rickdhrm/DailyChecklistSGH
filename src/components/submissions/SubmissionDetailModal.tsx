@@ -3,6 +3,9 @@
 import React, { useState } from 'react';
 import { FormSubmission } from '@/types';
 import PumpLogsheetTable from '@/components/forms/PumpLogsheetTable';
+import LiftChecklistTable from '@/components/forms/LiftChecklistTable';
+import McfaChecklistTable from '@/components/forms/McfaChecklistTable';
+import PagingChecklistTable from '@/components/forms/PagingChecklistTable';
 import { 
   X, 
   CheckCircle2, 
@@ -17,15 +20,17 @@ import {
   Check, 
   ShieldAlert,
   Flame,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 
 interface SubmissionDetailModalProps {
   submission: FormSubmission | null;
   onClose: () => void;
+  onDelete?: (submission: FormSubmission) => void;
 }
 
-export default function SubmissionDetailModal({ submission, onClose }: SubmissionDetailModalProps) {
+export default function SubmissionDetailModal({ submission, onClose, onDelete }: SubmissionDetailModalProps) {
   const [showRawJson, setShowRawJson] = useState(false);
 
   if (!submission) return null;
@@ -43,6 +48,22 @@ export default function SubmissionDetailModal({ submission, onClose }: Submissio
     Boolean(submission.submission_data?.room_temperature) ||
     Boolean(submission.submission_data?.kondisi_ruang_pompa) ||
     (submission.schema_definition as any)?.layout === 'TABLE_LOGSHEET_POMPA';
+
+  const isLiftChecklist =
+    submission.template_code === 'CHK-LIFT-OPS' ||
+    submission.template_title?.toUpperCase().includes('OPERASIONAL LIFT') ||
+    (submission.schema_definition as any)?.layout === 'TABLE_CHEKLIST_LIFT';
+
+  const isMcfaChecklist =
+    submission.template_code === 'CHK-MCFA-ANN' ||
+    submission.template_title?.toUpperCase().includes('MCFA') ||
+    (submission.schema_definition as any)?.layout === 'TABLE_CHEKLIST_MCFA';
+
+  const isPagingChecklist =
+    submission.template_code === 'CHK-PAGING-EVAC' ||
+    submission.template_code === 'CHK-PAGING' ||
+    submission.template_title?.toUpperCase().includes('PAGING') ||
+    (submission.schema_definition as any)?.layout === 'TABLE_PAGING_EVAKUASI';
 
   const subData = submission.submission_data || {};
   const schema = submission.schema_definition;
@@ -111,7 +132,7 @@ export default function SubmissionDetailModal({ submission, onClose }: Submissio
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div 
-        className={`w-full ${isPumpLogsheet ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}
+        className={`w-full ${isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -330,6 +351,12 @@ export default function SubmissionDetailModal({ submission, onClose }: Submissio
                 </div>
               </div>
             </div>
+          ) : isLiftChecklist ? (
+            <LiftChecklistTable formData={subData} readOnly={true} />
+          ) : isMcfaChecklist ? (
+            <McfaChecklistTable formData={subData} readOnly={true} />
+          ) : isPagingChecklist ? (
+            <PagingChecklistTable formData={subData} readOnly={true} />
           ) : (
             <>
               {/* Gas Checklist Special Section */}
@@ -581,15 +608,34 @@ export default function SubmissionDetailModal({ submission, onClose }: Submissio
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
-          <div className="text-[11px] text-slate-500 font-mono truncate hidden sm:block">
-            Audit ID: {submission.id}
+        <div className="px-5 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-slate-500 font-mono truncate hidden sm:block">
+              Audit ID: {submission.id}
+            </span>
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(submission)}
+                className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Permanently remove this submission"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                Remove Submission
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <a
               href={
-                isGasForm
+                isPagingChecklist
+                  ? `/api/export/paging-pdf?id=${submission.id}`
+                  : isMcfaChecklist
+                  ? `/api/export/mcfa-pdf?id=${submission.id}`
+                  : isLiftChecklist
+                  ? `/api/export/lift-pdf?id=${submission.id}`
+                  : isGasForm
                   ? `/api/export/gas-pdf?id=${submission.id}`
                   : isPumpLogsheet
                   ? `/api/export/pump-pdf?id=${submission.id}`
@@ -600,7 +646,17 @@ export default function SubmissionDetailModal({ submission, onClose }: Submissio
               className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
             >
               <Printer className="h-3.5 w-3.5 text-amber-700" />
-              {isPumpLogsheet ? 'Download Logsheet PDF' : isGasForm ? 'Download FR-LO-005 PDF' : 'Download Audit PDF'}
+              {isPagingChecklist
+                ? 'Download Panel Paging PDF'
+                : isMcfaChecklist
+                ? 'Download Cheklist MCFA PDF'
+                : isLiftChecklist
+                ? 'Download Cheklist Lift PDF'
+                : isPumpLogsheet
+                ? 'Download Logsheet PDF'
+                : isGasForm
+                ? 'Download FR-LO-005 PDF'
+                : 'Download Audit PDF'}
             </a>
             <button
               type="button"

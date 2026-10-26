@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, pool } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
@@ -160,5 +160,64 @@ export async function PATCH(
       return NextResponse.json({ error: 'A department with this code already exists' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Failed to update department' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden. Only Administrators can remove departments.' }, { status: 403 });
+  }
+
+  try {
+    // 1. Fetch target department
+    const targetRes = await query<{ id: string; code: string; name: string }>(
+      `SELECT id, code, name FROM departments WHERE id = $1`,
+      [id]
+    );
+
+    if (targetRes.rowCount === 0) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
+    }
+
+    const targetDept = targetRes.rows[0];
+
+    // 2. Atomic deletion using dedicated pool client
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Unassign all users from this department
+      await client.query(`UPDATE users SET department_id = NULL WHERE department_id = $1`, [id]);
+
+      // Remove form assignments
+      await client.query(`DELETE FROM department_forms WHERE department_id = $1`, [id]);
+
+      // Delete the department
+      const delRes = await client.query(
+        `DELETE FROM departments WHERE id = $1 RETURNING id, code, name`,
+        [id]
+      );
+
+      await client.query('COMMIT');
+
+      return NextResponse.json({
+        success: true,
+        message: `Department "${targetDept.code} - ${targetDept.name}" removed successfully`,
+        deletedDepartment: delRes.rows[0],
+      });
+    } catch (txErr: any) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Error removing department:', error);
+    return NextResponse.json({ error: error.message || 'Failed to remove department' }, { status: 500 });
   }
 }

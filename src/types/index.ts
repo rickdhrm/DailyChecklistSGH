@@ -14,6 +14,7 @@ export interface User {
   department_id?: string;
   department_name?: string;
   department_code?: string;
+  submission_count?: number;
 }
 
 export interface Department {

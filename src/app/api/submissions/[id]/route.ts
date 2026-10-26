@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, pool } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
@@ -112,5 +112,92 @@ export async function PUT(
   } catch (error: any) {
     console.error('Error updating submission:', error);
     return NextResponse.json({ error: 'Failed to update submission' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Only Admin and Supervisor can remove submissions
+  if (currentUser.role !== 'ADMIN' && currentUser.role !== 'SPV') {
+    return NextResponse.json(
+      { error: 'Forbidden. Only supervisors and administrators can remove submissions.' },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const { id } = await params;
+
+    // Fetch submission with technician department info
+    const subRes = await query(
+      `SELECT s.id, s.technician_id, s.template_id, u.department_id, t.title as template_title
+       FROM form_submissions s
+       JOIN users u ON s.technician_id = u.id
+       JOIN form_templates t ON s.template_id = t.id
+       WHERE s.id = $1`,
+      [id]
+    );
+
+    if (subRes.rowCount === 0) {
+      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    }
+
+    const sub = subRes.rows[0];
+
+    // RBAC: SPV can only remove submissions in their department
+    if (currentUser.role === 'SPV') {
+      const isSameDept = currentUser.department_id && sub.department_id === currentUser.department_id;
+      const isSelf = sub.technician_id === currentUser.id;
+      
+      // Also check if the template belongs to SPV's department
+      const deptFormCheck = currentUser.department_id
+        ? await query(
+            `SELECT 1 FROM department_forms WHERE department_id = $1 AND template_id = $2`,
+            [currentUser.department_id, sub.template_id]
+          )
+        : { rowCount: 0 };
+
+      const isDeptForm = deptFormCheck.rowCount && deptFormCheck.rowCount > 0;
+
+      if (!isSameDept && !isSelf && !isDeptForm) {
+        return NextResponse.json(
+          { error: 'Supervisors can only remove submissions within their own department.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Atomic deletion
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM form_submission_audits WHERE submission_id = $1`, [id]);
+      const delRes = await client.query(
+        `DELETE FROM form_submissions WHERE id = $1 RETURNING id, template_id, technician_id`,
+        [id]
+      );
+      await client.query('COMMIT');
+
+      return NextResponse.json({
+        success: true,
+        message: `Submission for "${sub.template_title}" was successfully removed.`,
+        deletedSubmission: delRes.rows[0],
+      });
+    } catch (txErr: any) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Error removing submission:', error);
+    return NextResponse.json({ error: error.message || 'Failed to remove submission' }, { status: 500 });
   }
 }

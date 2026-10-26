@@ -117,8 +117,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { template_id, location_id, submission_data, technician_notes, has_abnormal_reading } = body;
 
-    if (!template_id || !location_id || !submission_data) {
+    if (!template_id || !submission_data) {
       return NextResponse.json({ error: 'Missing required submission fields' }, { status: 400 });
+    }
+
+    let finalLocationId = location_id;
+    if (!finalLocationId) {
+      const defLocRes = await query(`SELECT id FROM locations LIMIT 1`);
+      finalLocationId = defLocRes.rows[0]?.id;
+    }
+
+    if (!finalLocationId) {
+      return NextResponse.json({ error: 'No location configured in system' }, { status: 400 });
     }
 
     // Fetch active template version
@@ -156,7 +166,7 @@ export async function POST(request: Request) {
         template_id,
         templateVersion,
         currentUser.id,
-        location_id,
+        finalLocationId,
         status,
         !!has_abnormal_reading,
         technician_notes || '',

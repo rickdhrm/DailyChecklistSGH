@@ -6,6 +6,12 @@ import Navbar from '@/components/layout/Navbar';
 import { FormTemplate, Location, User, FormHeading, FormSubheading, FormChild, FormField } from '@/types';
 import PumpLogsheetTable from '@/components/forms/PumpLogsheetTable';
 import { PUMP_LOGSHEET_ITEMS } from '@/lib/pumpLogsheetConstants';
+import LiftChecklistTable from '@/components/forms/LiftChecklistTable';
+import { LIFT_GROUPS, COMPUTER_LIFT_ITEMS } from '@/lib/liftChecklistConstants';
+import McfaChecklistTable from '@/components/forms/McfaChecklistTable';
+import { MCFA_SECTIONS } from '@/lib/mcfaConstants';
+import PagingChecklistTable from '@/components/forms/PagingChecklistTable';
+import { PAGING_EQUIPMENT_ITEMS } from '@/lib/pagingConstants';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -116,6 +122,56 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
           });
         }
 
+        const isLift =
+          formDataObj.code === 'CHK-LIFT-OPS' ||
+          formDataObj.title?.toUpperCase().includes('OPERASIONAL LIFT') ||
+          formDataObj.schema_definition?.layout === 'TABLE_CHEKLIST_LIFT';
+
+        if (isLift) {
+          defaults['teknisi_nama'] = meData.user?.full_name || '';
+          defaults['tanggal'] = new Date().toISOString().split('T')[0];
+          LIFT_GROUPS.forEach((group) => {
+            group.items.forEach((item) => {
+              defaults[`${item.id}_status`] = 'OK';
+            });
+          });
+          COMPUTER_LIFT_ITEMS.forEach((comp) => {
+            defaults[`${comp.id}_status`] = 'OK';
+          });
+        }
+
+        const isMcfa =
+          formDataObj.code === 'CHK-MCFA-ANN' ||
+          formDataObj.title?.toUpperCase().includes('MCFA') ||
+          formDataObj.schema_definition?.layout === 'TABLE_CHEKLIST_MCFA';
+
+        if (isMcfa) {
+          defaults['teknisi_nama'] = meData.user?.full_name || '';
+          defaults['tanggal'] = new Date().toISOString().split('T')[0];
+          MCFA_SECTIONS.forEach((sec) => {
+            for (let i = 1; i <= sec.rowCount; i++) {
+              defaults[`mcfa_${sec.id}_${i}_status`] = 'NORMAL';
+            }
+          });
+        }
+
+        const isPaging =
+          formDataObj.code === 'CHK-PAGING-EVAC' ||
+          formDataObj.code === 'CHK-PAGING' ||
+          formDataObj.title?.toUpperCase().includes('PAGING') ||
+          formDataObj.schema_definition?.layout === 'TABLE_PAGING_EVAKUASI';
+
+        if (isPaging) {
+          defaults['teknisi_nama'] = meData.user?.full_name || '';
+          defaults['tanggal'] = new Date().toISOString().split('T')[0];
+          PAGING_EQUIPMENT_ITEMS.forEach((item) => {
+            defaults[`${item.id}_status_on_off`] = item.defaultStatus;
+            defaults[`${item.id}_test_sound_1`] = item.defaultTestSound1;
+            defaults[`${item.id}_posisi`] = item.defaultPosisi;
+            defaults[`${item.id}_test_sound_2`] = item.defaultTestSound2;
+          });
+        }
+
         if (formDataObj.form_type === 'STANDARD' && formDataObj.schema_definition?.fields) {
           formDataObj.schema_definition.fields.forEach((f: FormField) => {
             if (f.field_type === 'STATUS_TOGGLE') {
@@ -163,6 +219,19 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
     template?.code === 'SGH-LOG-POMPA' ||
     template?.title?.toUpperCase().includes('LOGSHEET POMPA') ||
     (template?.schema_definition as any)?.layout === 'TABLE_LOGSHEET_POMPA';
+  const isLiftChecklist =
+    template?.code === 'CHK-LIFT-OPS' ||
+    template?.title?.toUpperCase().includes('OPERASIONAL LIFT') ||
+    (template?.schema_definition as any)?.layout === 'TABLE_CHEKLIST_LIFT';
+  const isMcfaChecklist =
+    template?.code === 'CHK-MCFA-ANN' ||
+    template?.title?.toUpperCase().includes('MCFA') ||
+    (template?.schema_definition as any)?.layout === 'TABLE_CHEKLIST_MCFA';
+  const isPagingChecklist =
+    template?.code === 'CHK-PAGING-EVAC' ||
+    template?.code === 'CHK-PAGING' ||
+    template?.title?.toUpperCase().includes('PAGING') ||
+    (template?.schema_definition as any)?.layout === 'TABLE_PAGING_EVAKUASI';
 
   const toggleSection = (headingId: string) => {
     setCollapsedSections(prev => ({ ...prev, [headingId]: !prev[headingId] }));
@@ -193,8 +262,22 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
   const handleDownloadOfficialPDF = async () => {
     setDownloadingPdf(true);
     try {
-      const endpoint = isPumpLogsheet ? '/api/export/pump-pdf' : '/api/export/gas-pdf';
-      const defaultFilename = isPumpLogsheet
+      const endpoint = isPagingChecklist
+        ? '/api/export/paging-pdf'
+        : isMcfaChecklist
+        ? '/api/export/mcfa-pdf'
+        : isLiftChecklist
+        ? '/api/export/lift-pdf'
+        : isPumpLogsheet
+        ? '/api/export/pump-pdf'
+        : '/api/export/gas-pdf';
+      const defaultFilename = isPagingChecklist
+        ? `SGH_Operasional_Panel_Paging_Evakuasi_${Date.now()}.pdf`
+        : isMcfaChecklist
+        ? `SGH_Cheklist_MCFA_Annunciator_${Date.now()}.pdf`
+        : isLiftChecklist
+        ? `SGH_Cheklist_Operasional_Lift_${Date.now()}.pdf`
+        : isPumpLogsheet
         ? `SGH_Logsheet_Pompa_Template_${Date.now()}.pdf`
         : `FR-LO-005_Checklist_Gas_${Date.now()}.pdf`;
 
@@ -248,9 +331,57 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
         hasAbnormal = true;
       }
 
-      // Merge Gas & Pump specific fields into submission data
+      if (isLiftChecklist) {
+        LIFT_GROUPS.forEach((g) => {
+          g.items.forEach((i) => {
+            if (formData[`${i.id}_status`] === 'TDK') hasAbnormal = true;
+          });
+        });
+        COMPUTER_LIFT_ITEMS.forEach((c) => {
+          if (formData[`${c.id}_status`] === 'TDK') hasAbnormal = true;
+        });
+      }
+
+      if (isMcfaChecklist) {
+        MCFA_SECTIONS.forEach((sec) => {
+          for (let i = 1; i <= sec.rowCount; i++) {
+            const status = formData[`mcfa_${sec.id}_${i}_status`];
+            if (status === 'TROUBLE' || status === 'FAULT' || status === 'ALARM') {
+              hasAbnormal = true;
+            }
+          }
+        });
+      }
+
+      if (isPagingChecklist) {
+        PAGING_EQUIPMENT_ITEMS.forEach((item) => {
+          if (formData[`${item.id}_status_on_off`] === 'OFF') hasAbnormal = true;
+          if (formData[`${item.id}_test_sound_1`] === 'NOT OK') hasAbnormal = true;
+          if (formData[`${item.id}_test_sound_2`] === 'NOT OK') hasAbnormal = true;
+        });
+      }
+
+      // Merge Gas & Pump & Lift & MCFA & Paging specific fields into submission data
       const finalSubmissionData = {
         ...formData,
+        ...(isPagingChecklist ? {
+          teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
+          spv_nama: formData.spv_nama || 'Supervisor Engineering',
+          bm_nama: formData.bm_nama || 'Building Manager',
+          tanggal: formData.tanggal || new Date().toISOString().split('T')[0],
+        } : {}),
+        ...(isMcfaChecklist ? {
+          teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
+          spv_nama: formData.spv_nama || 'Supervisor Engineering',
+          bm_nama: formData.bm_nama || 'Building Manager',
+          tanggal: formData.tanggal || new Date().toISOString().split('T')[0],
+        } : {}),
+        ...(isLiftChecklist ? {
+          teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
+          spv_nama: formData.spv_nama || 'Supervisor Engineering',
+          bm_nama: formData.bm_nama || 'Building Manager',
+          tanggal: formData.tanggal || new Date().toISOString().split('T')[0],
+        } : {}),
         ...(isPumpLogsheet ? {
           room_temperature: roomTemperature,
           tanggal: tanggalPeriksa,
@@ -332,13 +463,19 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
             Back to Checklists
           </button>
 
-          {(isGasForm || isPumpLogsheet) && (
+          {(isGasForm || isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist) && (
             <button
               type="button"
               onClick={handleDownloadOfficialPDF}
               disabled={downloadingPdf}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs ${
-                isPumpLogsheet
+                isPagingChecklist
+                  ? 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300'
+                  : isMcfaChecklist
+                  ? 'bg-red-50 hover:bg-red-100 text-red-800 border border-red-300'
+                  : isLiftChecklist
+                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300'
+                  : isPumpLogsheet
                   ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300'
                   : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
               }`}
@@ -346,9 +483,17 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
               {downloadingPdf ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Download className={`h-3.5 w-3.5 ${isPumpLogsheet ? 'text-amber-700' : 'text-rose-600'}`} />
+                <Download className={`h-3.5 w-3.5 ${isPagingChecklist ? 'text-purple-700' : isMcfaChecklist ? 'text-red-700' : isLiftChecklist ? 'text-blue-700' : isPumpLogsheet ? 'text-amber-700' : 'text-rose-600'}`} />
               )}
-              {isPumpLogsheet ? 'Download Blank PDF (Logsheet Pompa)' : 'Download Blank PDF (FR-LO-005)'}
+              {isPagingChecklist
+                ? 'Download Blank PDF (Panel Paging)'
+                : isMcfaChecklist
+                ? 'Download Blank PDF (Cheklist MCFA)'
+                : isLiftChecklist
+                ? 'Download Blank PDF (Cheklist Lift)'
+                : isPumpLogsheet
+                ? 'Download Blank PDF (Logsheet Pompa)'
+                : 'Download Blank PDF (FR-LO-005)'}
             </button>
           )}
         </div>
@@ -409,6 +554,51 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
                   <span className="text-amber-800 font-bold">: 27 Unit</span>
                 </div>
               </div>
+            ) : isPagingChecklist ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] font-mono shrink-0 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Gedung</span>
+                  <span className="text-slate-900 font-bold">: SGH TOWER</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Panel</span>
+                  <span className="text-purple-800 font-bold">: Master Paging Rack</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Total Unit</span>
+                  <span className="text-emerald-800 font-bold">: 11 Peralatan</span>
+                </div>
+              </div>
+            ) : isMcfaChecklist ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] font-mono shrink-0 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Gedung</span>
+                  <span className="text-slate-900 font-bold">: SGH TOWER</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Sistem</span>
+                  <span className="text-red-800 font-bold">: MCFA & Annunciator</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">History Log</span>
+                  <span className="text-emerald-800 font-bold">: Fire & Fault Record</span>
+                </div>
+              </div>
+            ) : isLiftChecklist ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] font-mono shrink-0 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Gedung</span>
+                  <span className="text-slate-900 font-bold">: SGH TOWER</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Unit</span>
+                  <span className="text-blue-800 font-bold">: Lift P1, P2, RPS, Escalator, Service</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Komputer</span>
+                  <span className="text-emerald-800 font-bold">: 4 Channel Komunikasi</span>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 shrink-0">
                 <Clock className="h-4 w-4 text-amber-600" />
@@ -417,37 +607,17 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
             )}
           </div>
 
-          {/* Location & Metadata Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-                Inspection Location Site
-              </label>
-              <select
-                value={selectedLocationId}
-                onChange={(e) => setSelectedLocationId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:bg-white transition-all"
-              >
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name} — {loc.building} ({loc.floor || 'Level'})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-amber-600" />
-                Inspector & Timestamp
-              </label>
-              <div className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-sm flex items-center justify-between">
-                <span className="font-medium">{user?.full_name || user?.username || 'Technician'} ({user?.role})</span>
-                <span className="text-xs text-slate-500 font-mono">
-                  {new Date().toLocaleDateString('id-ID')}
-                </span>
-              </div>
+          {/* Inspector & Timestamp Info */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-amber-600" />
+              Inspector & Timestamp
+            </label>
+            <div className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-sm flex items-center justify-between">
+              <span className="font-medium">{user?.full_name || user?.username || 'Technician'} ({user?.role})</span>
+              <span className="text-xs text-slate-500 font-mono">
+                {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+              </span>
             </div>
           </div>
         </div>
@@ -665,6 +835,24 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
             </div>
+          ) : isLiftChecklist ? (
+            <LiftChecklistTable
+              formData={formData}
+              onChange={handleFieldChange}
+              readOnly={false}
+            />
+          ) : isMcfaChecklist ? (
+            <McfaChecklistTable
+              formData={formData}
+              onChange={handleFieldChange}
+              readOnly={false}
+            />
+          ) : isPagingChecklist ? (
+            <PagingChecklistTable
+              formData={formData}
+              onChange={handleFieldChange}
+              readOnly={false}
+            />
           ) : (
             <>
               {/* STANDARD FLAT FORM RENDERER */}

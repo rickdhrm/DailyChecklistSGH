@@ -167,18 +167,23 @@ export default function HomePage() {
   const getFormIcon = (code: string) => {
     switch (code) {
       case 'CHK-POMPA':
+      case 'SGH-LOG-POMPA':
         return <Activity className="h-5 w-5 text-blue-600" />;
       case 'CHK-LIFT':
+      case 'CHK-LIFT-OPS':
         return <Wrench className="h-5 w-5 text-indigo-600" />;
       case 'CHK-MCFA':
-        return <ShieldCheck className="h-5 w-5 text-rose-600" />;
+      case 'CHK-MCFA-ANN':
+        return <Flame className="h-5 w-5 text-rose-600" />;
       case 'CHK-ACCESS':
         return <Server className="h-5 w-5 text-emerald-600" />;
       case 'CHK-PAGING':
+      case 'CHK-PAGING-EVAC':
         return <Radio className="h-5 w-5 text-purple-600" />;
       case 'CHK-ITM-DAIKIN':
         return <Wind className="h-5 w-5 text-cyan-600" />;
       case 'CHK-GAS':
+      case 'FR-LO-005':
         return <Flame className="h-5 w-5 text-amber-600" />;
       case 'CHK-PLN':
         return <Zap className="h-5 w-5 text-yellow-600" />;

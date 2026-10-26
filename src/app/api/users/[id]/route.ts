@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, pool } from '@/lib/db';
 import { getCurrentUser, hashPassword } from '@/lib/auth';
 
 export async function PATCH(
@@ -116,5 +116,108 @@ export async function PATCH(
   } catch (error: any) {
     console.error('Error updating user:', error);
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const currentUser = await getCurrentUser();
+
+  if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'SPV')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  try {
+    // 1. Fetch target user
+    const targetRes = await query<{
+      id: string;
+      role: string;
+      department_id: string | null;
+      full_name: string;
+      username: string;
+    }>(
+      `SELECT id, role, department_id, full_name, username FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (targetRes.rowCount === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const targetUser = targetRes.rows[0];
+
+    // 2. Prevent removing own active account
+    if (targetUser.id === currentUser.id) {
+      return NextResponse.json(
+        { error: 'You cannot remove your own active account' },
+        { status: 400 }
+      );
+    }
+
+    // 3. Prevent removing primary system admin
+    if (targetUser.username === 'admin') {
+      return NextResponse.json(
+        { error: 'The primary system admin account cannot be removed' },
+        { status: 400 }
+      );
+    }
+
+    // 4. RBAC for Supervisor
+    if (currentUser.role === 'SPV') {
+      if (targetUser.role !== 'TECHNICIAN') {
+        return NextResponse.json(
+          { error: 'Supervisors can only remove technician accounts' },
+          { status: 403 }
+        );
+      }
+      if (!currentUser.department_id || targetUser.department_id !== currentUser.department_id) {
+        return NextResponse.json(
+          { error: 'Supervisors can only remove technicians within their own department' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 5. Connect dedicated client for atomic transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Clean up restricting foreign keys:
+      // Delete audits modified by this user
+      await client.query(`DELETE FROM form_submission_audits WHERE modified_by = $1`, [id]);
+      // Delete submissions submitted by this user
+      await client.query(`DELETE FROM form_submissions WHERE technician_id = $1`, [id]);
+
+      // Nullify references in templates, departments, housekeeping
+      await client.query(`UPDATE form_templates SET created_by = NULL WHERE created_by = $1`, [id]);
+      await client.query(`UPDATE departments SET created_by = NULL WHERE created_by = $1`, [id]);
+      await client.query(`UPDATE housekeeping_logs SET executed_by = NULL WHERE executed_by = $1`, [id]);
+
+      // Delete user
+      const delRes = await client.query(
+        `DELETE FROM users WHERE id = $1 RETURNING id, username, full_name, role`,
+        [id]
+      );
+
+      await client.query('COMMIT');
+
+      return NextResponse.json({
+        success: true,
+        message: `Account "${targetUser.username}" (${targetUser.full_name}) has been removed successfully`,
+        deletedUser: delRes.rows[0],
+      });
+    } catch (txErr: any) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (error: any) {
+    console.error('Error removing user account:', error);
+    return NextResponse.json({ error: error.message || 'Failed to remove user account' }, { status: 500 });
   }
 }

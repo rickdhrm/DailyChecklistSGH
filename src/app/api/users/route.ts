@@ -12,7 +12,8 @@ export async function GET() {
     let sql = `
       SELECT u.id, u.username, u.email, u.full_name, u.employee_code, u.role, u.is_active, u.created_at,
              u.department_id, d.name AS department_name, d.code AS department_code,
-             creator.full_name AS registered_by_name
+             creator.full_name AS registered_by_name,
+             (SELECT COUNT(*)::int FROM form_submissions WHERE technician_id = u.id) AS submission_count
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       LEFT JOIN users creator ON u.created_by = creator.id

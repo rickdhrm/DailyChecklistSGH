@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   Check,
   ChevronRight,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 
 export default function DepartmentsAdminPage() {
@@ -52,6 +53,12 @@ export default function DepartmentsAdminPage() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [formSearchTerm, setFormSearchTerm] = useState('');
+
+  // Delete Department Modal State
+  const [deleteDeptModalOpen, setDeleteDeptModalOpen] = useState(false);
+  const [deptToDelete, setDeptToDelete] = useState<Department | null>(null);
+  const [deleteDeptSubmitting, setDeleteDeptSubmitting] = useState(false);
+  const [deleteDeptError, setDeleteDeptError] = useState<string | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -230,6 +237,37 @@ export default function DepartmentsAdminPage() {
       setModalError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openDeleteDeptModal = (dept: Department) => {
+    setDeptToDelete(dept);
+    setDeleteDeptError(null);
+    setDeleteDeptModalOpen(true);
+  };
+
+  const handleDeleteDept = async () => {
+    if (!deptToDelete) return;
+    setDeleteDeptSubmitting(true);
+    setDeleteDeptError(null);
+
+    try {
+      const res = await fetch(`/api/departments/${deptToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to remove department');
+      }
+
+      setFeedback(`Department "${deptToDelete.code} - ${deptToDelete.name}" was successfully removed.`);
+      setDeleteDeptModalOpen(false);
+      setDeptToDelete(null);
+      await Promise.all([fetchDepartments(), fetchUsers(), fetchForms()]);
+    } catch (err: any) {
+      setDeleteDeptError(err.message || 'Error removing department');
+    } finally {
+      setDeleteDeptSubmitting(false);
     }
   };
 
@@ -497,14 +535,22 @@ export default function DepartmentsAdminPage() {
                       </div>
                     </div>
 
-                    {/* Manage Button */}
-                    <div className="mt-4 pt-3 border-t border-slate-100">
+                    {/* Action Buttons */}
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2">
                       <button
                         onClick={() => openEditModal(dept)}
-                        className="w-full py-2 px-3 rounded-lg border border-slate-200 text-slate-700 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        className="flex-1 py-2 px-3 rounded-lg border border-slate-200 text-slate-700 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <Edit className="h-3.5 w-3.5" />
-                        Manage & Assign
+                        <span>Manage & Assign</span>
+                      </button>
+                      <button
+                        onClick={() => openDeleteDeptModal(dept)}
+                        className="py-2 px-2.5 rounded-lg border border-rose-200 text-rose-600 hover:text-rose-800 hover:border-rose-400 hover:bg-rose-50 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                        title={`Remove ${dept.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                        <span className="hidden sm:inline">Remove</span>
                       </button>
                     </div>
                   </div>
@@ -836,6 +882,105 @@ export default function DepartmentsAdminPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        {/* Delete Department Confirmation Modal */}
+        {deleteDeptModalOpen && deptToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+              <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-rose-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-full bg-rose-100 text-rose-600 border border-rose-200 shrink-0">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base font-serif">Remove Department</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Confirm permanent removal of division
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDeleteDeptModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {deleteDeptError && (
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span>{deleteDeptError}</span>
+                  </div>
+                )}
+
+                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Department Name:</span>
+                    <span className="font-bold text-slate-900">{deptToDelete.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Code:</span>
+                    <span className="font-mono font-semibold text-slate-800 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                      {deptToDelete.code}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Assigned Staff:</span>
+                    <span className="font-semibold text-slate-800">{deptToDelete.assigned_user_count || 0} Members</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Linked Checklists:</span>
+                    <span className="font-semibold text-slate-800">{deptToDelete.assigned_form_count || 0} Forms</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Reassignment Notice:</span>
+                    <p className="mt-0.5 text-amber-800 leading-relaxed">
+                      Staff currently allocated to this department will become unassigned, and linked checklist forms will be unlinked.
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Are you sure you want to remove <strong className="text-slate-900">{deptToDelete.code} - {deptToDelete.name}</strong>? This action is permanent and cannot be undone.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteDeptModalOpen(false)}
+                    disabled={deleteDeptSubmitting}
+                    className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteDept}
+                    disabled={deleteDeptSubmitting}
+                    className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 shadow-md shadow-rose-600/20 cursor-pointer transition-colors"
+                  >
+                    {deleteDeptSubmitting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Removing Department...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Remove Department</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

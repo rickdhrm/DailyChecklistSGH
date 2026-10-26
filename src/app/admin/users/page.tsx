@@ -21,7 +21,8 @@ import {
   EyeOff,
   Building2,
   Lock,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 
 export default function UsersAdminPage() {
@@ -56,6 +57,12 @@ export default function UsersAdminPage() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  // Delete User Modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -226,6 +233,58 @@ export default function UsersAdminPage() {
       );
     }
     return false;
+  };
+
+  // Permission check for removing account
+  const canDeleteUser = (user: User): boolean => {
+    if (!currentUser) return false;
+    // Cannot delete active self session
+    if (user.id === currentUser.id) return false;
+    // Cannot delete primary system admin
+    if (user.username === 'admin') return false;
+    // Admin can delete any user
+    if (currentUser.role === 'ADMIN') return true;
+    // SPV can only delete technicians in their department
+    if (currentUser.role === 'SPV') {
+      return (
+        user.role === 'TECHNICIAN' &&
+        !!currentUser.department_id &&
+        user.department_id === currentUser.department_id
+      );
+    }
+    return false;
+  };
+
+  const openDeleteModal = (user: User) => {
+    setUserToDelete(user);
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/users/${userToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to remove user account');
+      }
+
+      setFeedback(`Account "${userToDelete.username}" (${userToDelete.full_name}) has been permanently removed.`);
+      setDeleteModalOpen(false);
+      setUserToDelete(null);
+      await fetchUsersList();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error occurred while removing user account');
+    } finally {
+      setDeleteSubmitting(false);
+    }
   };
 
   const filtered = users.filter((u) => {
@@ -424,27 +483,43 @@ export default function UsersAdminPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {permittedToReset ? (
-                            <button
-                              onClick={() => openResetPasswordModal(u)}
-                              className="px-2.5 py-1 rounded-md border border-slate-300 text-slate-700 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50/50 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <KeyRound className="h-3 w-3 text-amber-600" />
-                              Reset Password
-                            </button>
-                          ) : (
-                            <span
-                              title={
-                                currentUser?.role === 'SPV'
-                                  ? 'Supervisors can only reset password for technicians in their department'
-                                  : 'Protected account'
-                              }
-                              className="inline-flex items-center gap-1 text-[11px] text-slate-400 px-2 py-1 rounded bg-slate-100/60 cursor-not-allowed"
-                            >
-                              <Lock className="h-3 w-3 text-slate-400" />
-                              Protected
-                            </span>
-                          )}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {permittedToReset && (
+                              <button
+                                onClick={() => openResetPasswordModal(u)}
+                                className="px-2.5 py-1 rounded-md border border-slate-300 text-slate-700 hover:text-amber-800 hover:border-amber-400 hover:bg-amber-50/50 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Reset Password"
+                              >
+                                <KeyRound className="h-3 w-3 text-amber-600" />
+                                <span className="hidden sm:inline">Reset Password</span>
+                              </button>
+                            )}
+                            {canDeleteUser(u) && (
+                              <button
+                                onClick={() => openDeleteModal(u)}
+                                className="px-2.5 py-1 rounded-md border border-rose-200 text-rose-600 hover:text-rose-800 hover:border-rose-400 hover:bg-rose-50 text-[11px] font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Remove User Account"
+                              >
+                                <Trash2 className="h-3 w-3 text-rose-500" />
+                                <span>Remove</span>
+                              </button>
+                            )}
+                            {!permittedToReset && !canDeleteUser(u) && (
+                              <span
+                                title={
+                                  u.id === currentUser?.id
+                                    ? 'Current active user session'
+                                    : u.username === 'admin'
+                                    ? 'Primary system administrator account'
+                                    : 'Protected account'
+                                }
+                                className="inline-flex items-center gap-1 text-[11px] text-slate-400 px-2 py-1 rounded bg-slate-100/60 cursor-not-allowed"
+                              >
+                                <Lock className="h-3 w-3 text-slate-400" />
+                                {u.id === currentUser?.id ? 'Current User' : 'Protected'}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -782,6 +857,110 @@ export default function UsersAdminPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteModalOpen && userToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+              <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-3 bg-rose-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-full bg-rose-100 text-rose-600 border border-rose-200 shrink-0">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base font-serif">Remove Account</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Confirm permanent removal of staff credentials
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {deleteError && (
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span>{deleteError}</span>
+                  </div>
+                )}
+
+                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Full Name:</span>
+                    <span className="font-bold text-slate-900">{userToDelete.full_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Username:</span>
+                    <span className="font-mono font-semibold text-slate-800 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                      {userToDelete.username}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Role:</span>
+                    <span className="font-semibold text-slate-800">{userToDelete.role}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Department:</span>
+                    <span className="font-semibold text-slate-800">
+                      {userToDelete.department_name || 'Unassigned'}
+                    </span>
+                  </div>
+                </div>
+
+                {userToDelete.submission_count !== undefined && userToDelete.submission_count > 0 && (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Notice regarding checklist records:</span>
+                      <p className="mt-0.5 text-amber-800 leading-relaxed">
+                        This user has submitted <strong>{userToDelete.submission_count} form(s)</strong>. Removing this account will also remove associated inspection records from the system.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Are you sure you want to remove <strong className="text-slate-900">@{userToDelete.username}</strong>? This user will no longer be able to log in, and all assigned credentials will be wiped immediately.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteModalOpen(false)}
+                    disabled={deleteSubmitting}
+                    className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteUser}
+                    disabled={deleteSubmitting}
+                    className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50 shadow-md shadow-rose-600/20 cursor-pointer transition-colors"
+                  >
+                    {deleteSubmitting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Removing Account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Remove Account</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
