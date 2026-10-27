@@ -6,6 +6,8 @@ import PumpLogsheetTable from '@/components/forms/PumpLogsheetTable';
 import LiftChecklistTable from '@/components/forms/LiftChecklistTable';
 import McfaChecklistTable from '@/components/forms/McfaChecklistTable';
 import PagingChecklistTable from '@/components/forms/PagingChecklistTable';
+import DaikinChecklistTable from '@/components/forms/DaikinChecklistTable';
+import ElectricalMonthlyTable from '@/components/forms/ElectricalMonthlyTable';
 import { 
   X, 
   CheckCircle2, 
@@ -64,6 +66,17 @@ export default function SubmissionDetailModal({ submission, onClose, onDelete }:
     submission.template_code === 'CHK-PAGING' ||
     submission.template_title?.toUpperCase().includes('PAGING') ||
     (submission.schema_definition as any)?.layout === 'TABLE_PAGING_EVAKUASI';
+
+  const isDaikinChecklist =
+    submission.template_code === 'CHK-ITM-DAIKIN' ||
+    submission.template_title?.toUpperCase().includes('ITM DAIKIN') ||
+    submission.template_title?.toUpperCase().includes('DAIKIN') ||
+    (submission.schema_definition as any)?.layout === 'TABLE_ITM_DAIKIN';
+
+  const isElectricalMonthly =
+    submission.template_code === 'LOG-ELEC-MONTHLY' ||
+    submission.template_title?.toUpperCase().includes('ELECTRICAL') ||
+    (submission.schema_definition as any)?.layout === 'TABLE_ELECTRICAL_MONTHLY';
 
   const subData = submission.submission_data || {};
   const schema = submission.schema_definition;
@@ -132,7 +145,7 @@ export default function SubmissionDetailModal({ submission, onClose, onDelete }:
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div 
-        className={`w-full ${isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}
+        className={`w-full ${isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist || isDaikinChecklist || isElectricalMonthly ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -357,6 +370,10 @@ export default function SubmissionDetailModal({ submission, onClose, onDelete }:
             <McfaChecklistTable formData={subData} readOnly={true} />
           ) : isPagingChecklist ? (
             <PagingChecklistTable formData={subData} readOnly={true} />
+          ) : isDaikinChecklist ? (
+            <DaikinChecklistTable formData={subData} readOnly={true} />
+          ) : isElectricalMonthly ? (
+            <ElectricalMonthlyTable formData={subData} readOnly={true} submissionId={submission.id} />
           ) : (
             <>
               {/* Gas Checklist Special Section */}
@@ -629,7 +646,11 @@ export default function SubmissionDetailModal({ submission, onClose, onDelete }:
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <a
               href={
-                isPagingChecklist
+                isElectricalMonthly
+                  ? `/api/export/electrical-pdf?id=${submission.id}`
+                  : isDaikinChecklist
+                  ? `/api/export/daikin-pdf?id=${submission.id}`
+                  : isPagingChecklist
                   ? `/api/export/paging-pdf?id=${submission.id}`
                   : isMcfaChecklist
                   ? `/api/export/mcfa-pdf?id=${submission.id}`
@@ -646,7 +667,11 @@ export default function SubmissionDetailModal({ submission, onClose, onDelete }:
               className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
             >
               <Printer className="h-3.5 w-3.5 text-amber-700" />
-              {isPagingChecklist
+              {isElectricalMonthly
+                ? 'Download Logsheet Electrical PDF'
+                : isDaikinChecklist
+                ? 'Download Panel ITM Daikin PDF'
+                : isPagingChecklist
                 ? 'Download Panel Paging PDF'
                 : isMcfaChecklist
                 ? 'Download Cheklist MCFA PDF'

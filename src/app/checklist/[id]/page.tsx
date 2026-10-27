@@ -12,6 +12,10 @@ import McfaChecklistTable from '@/components/forms/McfaChecklistTable';
 import { MCFA_SECTIONS } from '@/lib/mcfaConstants';
 import PagingChecklistTable from '@/components/forms/PagingChecklistTable';
 import { PAGING_EQUIPMENT_ITEMS } from '@/lib/pagingConstants';
+import DaikinChecklistTable from '@/components/forms/DaikinChecklistTable';
+import { DAIKIN_FLOOR_ITEMS } from '@/lib/daikinConstants';
+import ElectricalMonthlyTable from '@/components/forms/ElectricalMonthlyTable';
+import { ELECTRICAL_CHECKLIST_CODE, ELECTRICAL_LAYOUT } from '@/lib/electricalConstants';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -172,6 +176,33 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
           });
         }
 
+        const isDaikin =
+          formDataObj.code === 'CHK-ITM-DAIKIN' ||
+          formDataObj.title?.toUpperCase().includes('ITM DAIKIN') ||
+          formDataObj.title?.toUpperCase().includes('DAIKIN') ||
+          formDataObj.schema_definition?.layout === 'TABLE_ITM_DAIKIN';
+
+        if (isDaikin) {
+          defaults['teknisi_nama'] = meData.user?.full_name || '';
+          defaults['tanggal'] = new Date().toISOString().split('T')[0];
+          DAIKIN_FLOOR_ITEMS.forEach((floor) => {
+            defaults[`${floor.id}_status`] = floor.defaultStatus;
+            defaults[`${floor.id}_temperature`] = floor.defaultTemperature;
+            defaults[`${floor.id}_keterangan`] = floor.defaultKeterangan;
+          });
+        }
+
+        const isElectrical =
+          formDataObj.code === 'LOG-ELEC-MONTHLY' ||
+          formDataObj.title?.toUpperCase().includes('ELECTRICAL') ||
+          formDataObj.schema_definition?.layout === 'TABLE_ELECTRICAL_MONTHLY';
+
+        if (isElectrical) {
+          defaults['teknisi_nama'] = meData.user?.full_name || '';
+          const now = new Date();
+          defaults['period'] = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
         if (formDataObj.form_type === 'STANDARD' && formDataObj.schema_definition?.fields) {
           formDataObj.schema_definition.fields.forEach((f: FormField) => {
             if (f.field_type === 'STATUS_TOGGLE') {
@@ -232,6 +263,16 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
     template?.code === 'CHK-PAGING' ||
     template?.title?.toUpperCase().includes('PAGING') ||
     (template?.schema_definition as any)?.layout === 'TABLE_PAGING_EVAKUASI';
+  const isDaikinChecklist =
+    template?.code === 'CHK-ITM-DAIKIN' ||
+    template?.title?.toUpperCase().includes('ITM DAIKIN') ||
+    template?.title?.toUpperCase().includes('DAIKIN') ||
+    (template?.schema_definition as any)?.layout === 'TABLE_ITM_DAIKIN';
+  const isElectricalMonthly =
+    template?.code === ELECTRICAL_CHECKLIST_CODE ||
+    template?.code === 'LOG-ELEC-MONTHLY' ||
+    template?.title?.toUpperCase().includes('ELECTRICAL') ||
+    (template?.schema_definition as any)?.layout === ELECTRICAL_LAYOUT;
 
   const toggleSection = (headingId: string) => {
     setCollapsedSections(prev => ({ ...prev, [headingId]: !prev[headingId] }));
@@ -262,7 +303,11 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
   const handleDownloadOfficialPDF = async () => {
     setDownloadingPdf(true);
     try {
-      const endpoint = isPagingChecklist
+      const endpoint = isElectricalMonthly
+        ? `/api/export/electrical-pdf${formData.period ? `?period=${formData.period}` : ''}`
+        : isDaikinChecklist
+        ? '/api/export/daikin-pdf'
+        : isPagingChecklist
         ? '/api/export/paging-pdf'
         : isMcfaChecklist
         ? '/api/export/mcfa-pdf'
@@ -271,7 +316,11 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
         : isPumpLogsheet
         ? '/api/export/pump-pdf'
         : '/api/export/gas-pdf';
-      const defaultFilename = isPagingChecklist
+      const defaultFilename = isElectricalMonthly
+        ? `SGH_Logsheet_Electrical_${Date.now()}.pdf`
+        : isDaikinChecklist
+        ? `SGH_Panel_ITM_Daikin_${Date.now()}.pdf`
+        : isPagingChecklist
         ? `SGH_Operasional_Panel_Paging_Evakuasi_${Date.now()}.pdf`
         : isMcfaChecklist
         ? `SGH_Cheklist_MCFA_Annunciator_${Date.now()}.pdf`
@@ -361,9 +410,29 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
         });
       }
 
-      // Merge Gas & Pump & Lift & MCFA & Paging specific fields into submission data
+      if (isDaikinChecklist) {
+        DAIKIN_FLOOR_ITEMS.forEach((floor) => {
+          if (formData[`${floor.id}_status`] === 'OFF') hasAbnormal = true;
+          const t = parseFloat(formData[`${floor.id}_temperature`]);
+          if (!isNaN(t) && t > 27) hasAbnormal = true;
+        });
+      }
+
+      // Merge Gas & Pump & Lift & MCFA & Paging & Daikin & Electrical specific fields into submission data
       const finalSubmissionData = {
         ...formData,
+        ...(isElectricalMonthly ? {
+          teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
+          spv_nama: formData.spv_nama || 'Supervisor Engineering',
+          bm_nama: formData.bm_nama || 'Building Manager',
+          period: formData.period || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`,
+        } : {}),
+        ...(isDaikinChecklist ? {
+          teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
+          spv_nama: formData.spv_nama || 'Supervisor Engineering',
+          bm_nama: formData.bm_nama || 'Building Manager',
+          tanggal: formData.tanggal || new Date().toISOString().split('T')[0],
+        } : {}),
         ...(isPagingChecklist ? {
           teknisi_nama: formData.teknisi_nama || user?.full_name || 'Teknisi Engineering',
           spv_nama: formData.spv_nama || 'Supervisor Engineering',
@@ -463,13 +532,17 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
             Back to Checklists
           </button>
 
-          {(isGasForm || isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist) && (
+          {(isGasForm || isPumpLogsheet || isLiftChecklist || isMcfaChecklist || isPagingChecklist || isDaikinChecklist || isElectricalMonthly) && (
             <button
               type="button"
               onClick={handleDownloadOfficialPDF}
               disabled={downloadingPdf}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs ${
-                isPagingChecklist
+                isElectricalMonthly
+                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
+                  : isDaikinChecklist
+                  ? 'bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-300'
+                  : isPagingChecklist
                   ? 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300'
                   : isMcfaChecklist
                   ? 'bg-red-50 hover:bg-red-100 text-red-800 border border-red-300'
@@ -483,9 +556,13 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
               {downloadingPdf ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Download className={`h-3.5 w-3.5 ${isPagingChecklist ? 'text-purple-700' : isMcfaChecklist ? 'text-red-700' : isLiftChecklist ? 'text-blue-700' : isPumpLogsheet ? 'text-amber-700' : 'text-rose-600'}`} />
+                <Download className={`h-3.5 w-3.5 ${isElectricalMonthly ? 'text-amber-800' : isDaikinChecklist ? 'text-cyan-700' : isPagingChecklist ? 'text-purple-700' : isMcfaChecklist ? 'text-red-700' : isLiftChecklist ? 'text-blue-700' : isPumpLogsheet ? 'text-amber-700' : 'text-rose-600'}`} />
               )}
-              {isPagingChecklist
+              {isElectricalMonthly
+                ? 'Download Blank PDF (Log Sheet Electrical)'
+                : isDaikinChecklist
+                ? 'Download Blank PDF (Panel ITM Daikin)'
+                : isPagingChecklist
                 ? 'Download Blank PDF (Panel Paging)'
                 : isMcfaChecklist
                 ? 'Download Blank PDF (Cheklist MCFA)'
@@ -552,6 +629,36 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">Total Pompa</span>
                   <span className="text-amber-800 font-bold">: 27 Unit</span>
+                </div>
+              </div>
+            ) : isElectricalMonthly ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] font-mono shrink-0 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Gedung</span>
+                  <span className="text-slate-900 font-bold">: SGH TOWER</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Form</span>
+                  <span className="text-amber-800 font-bold">: Log Sheet Electrical</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Periode</span>
+                  <span className="text-emerald-800 font-bold">: 31 Hari (Bulanan)</span>
+                </div>
+              </div>
+            ) : isDaikinChecklist ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] font-mono shrink-0 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Gedung</span>
+                  <span className="text-slate-900 font-bold">: SGH TOWER</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Panel</span>
+                  <span className="text-cyan-800 font-bold">: Intelligent Touch Manager</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-500">Total Lantai</span>
+                  <span className="text-emerald-800 font-bold">: 11 Area (Lt. 10 - GF)</span>
                 </div>
               </div>
             ) : isPagingChecklist ? (
@@ -852,6 +959,19 @@ export default function ChecklistEntryPage({ params }: { params: Promise<{ id: s
               formData={formData}
               onChange={handleFieldChange}
               readOnly={false}
+            />
+          ) : isDaikinChecklist ? (
+            <DaikinChecklistTable
+              formData={formData}
+              onChange={handleFieldChange}
+              readOnly={false}
+            />
+          ) : isElectricalMonthly ? (
+            <ElectricalMonthlyTable
+              formData={formData}
+              onChange={handleFieldChange}
+              readOnly={false}
+              currentUser={user || undefined}
             />
           ) : (
             <>
